@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.1)
+cmake_minimum_required (VERSION 3.5)
 project(jansson C)
 
 # Options
@@ -215,7 +215,18 @@ if (NOT DEFINED JSON_INT_T)
    endif ()
 endif ()
 
+
+# If locale.h and localeconv() are available, define to 1, otherwise to 0.
 check_include_files (locale.h HAVE_LOCALE_H)
+check_function_exists (localeconv HAVE_LOCALECONV)
+
+if (HAVE_LOCALECONV AND HAVE_LOCALE_H)
+   set (JSON_HAVE_LOCALECONV 1)
+else ()
+   set (JSON_HAVE_LOCALECONV 0)
+endif()
+
+# check if we have setlocale
 check_function_exists(setlocale HAVE_SETLOCALE)
 
 # Check what the inline keyword is.
@@ -260,17 +271,14 @@ configure_file (${CMAKE_CURRENT_SOURCE_DIR}/cmake/jansson_config.h.cmake
 file (COPY ${CMAKE_CURRENT_SOURCE_DIR}/src/jansson.h
            DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/include/)
 
-add_definitions(-DJANSSON_USING_CMAKE)
-
 # configure the private config file
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/cmake/jansson_private_config.h.cmake
                 ${CMAKE_CURRENT_BINARY_DIR}/private_include/jansson_private_config.h)
 
-# and tell the source code to include it
-add_definitions(-DHAVE_CONFIG_H)
-
-include_directories (${CMAKE_CURRENT_BINARY_DIR}/include)
 include_directories (${CMAKE_CURRENT_BINARY_DIR}/private_include)
+
+# Configuration flags will be set on project later once we have defined the target
+
 
 # Add the lib sources.
 file(GLOB JANSSON_SRC src/*.c)
@@ -346,6 +354,19 @@ else()
    set_target_properties(jansson PROPERTIES
       POSITION_INDEPENDENT_CODE true)
 endif()
+
+
+# Now target jansson is declared, set per-target values
+target_compile_definitions(jansson PUBLIC JANSSON_USING_CMAKE)
+target_compile_definitions(jansson PRIVATE HAVE_CONFIG_H)
+
+target_include_directories(jansson PUBLIC
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+	INTERFACE $<INSTALL_INTERFACE:include>
+)
+
+add_library( jansson::jansson ALIAS jansson )
+
 
 if (JANSSON_EXAMPLES)
 	add_executable(simple_parse "${CMAKE_CURRENT_SOURCE_DIR}/examples/simple_parse.c")
